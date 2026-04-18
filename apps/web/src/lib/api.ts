@@ -116,3 +116,28 @@ export async function updateAssumptions(runId: string, assumptions: Assumptions)
 
   return body;
 }
+
+export async function ingestYouTubeEvidence(runId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/ingest-youtube`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while ingesting YouTube evidence. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
