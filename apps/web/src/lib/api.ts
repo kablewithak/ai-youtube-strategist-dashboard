@@ -27,7 +27,9 @@ function getErrorMessage(status: number, body: unknown) {
 
   if (body && typeof body === "object") {
     const maybeDetail =
-      "detail" in body && typeof body.detail === "string" ? body.detail : null;
+      "detail" in body && typeof (body as { detail?: unknown }).detail === "string"
+        ? (body as { detail: string }).detail
+        : null;
 
     if (maybeDetail) {
       return `Request failed (${status}): ${maybeDetail}`;
@@ -105,6 +107,110 @@ export async function updateAssumptions(runId: string, assumptions: Assumptions)
   } catch {
     throw new Error(
       "Could not reach the API while saving assumptions. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
+
+export async function ingestYouTubeEvidence(runId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/ingest-youtube`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while ingesting YouTube evidence. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
+
+export async function uploadScreenshots(runId: string, files: File[]) {
+  const formData = new FormData();
+
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/screenshots`, {
+      method: "POST",
+      body: formData,
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while uploading screenshots. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
+
+export async function synthesizeEvidence(runId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/synthesize-evidence`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while synthesizing evidence. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
+
+export async function draftRecommendations(runId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/recommendations/draft`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while drafting recommendations. Make sure the backend is still running."
     );
   }
 
