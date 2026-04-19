@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  draftRecommendations,
   getRun,
   ingestYouTubeEvidence,
   synthesizeEvidence,
@@ -87,6 +88,47 @@ type RunData = {
   } | null;
 };
 
+type RecommendationDraft = {
+  audience_analysis: {
+    viewer_state_profile: {
+      emotional_jobs: string[];
+      hidden_tensions: string[];
+      desired_identity: string[];
+      emotional_drivers: string[];
+      trust_mode: string;
+      evidence_notes: string[];
+    };
+    confirmed_findings: string[];
+    inferences: string[];
+    weak_signals: string[];
+    assumptions_used: string[];
+  };
+  candidates: Array<{
+    id: string;
+    topic: string;
+    angle: string;
+    target_viewer_state: string;
+    emotional_driver: string;
+    evidence_anchors: string[];
+    trend_anchors: string[];
+    channel_fit_score: number;
+    audience_fit_score: number;
+    trend_score: number;
+  }>;
+  final_recommendations: Array<{
+    rank: number;
+    idea: string;
+    hook: string;
+    title_options: string[];
+    thumbnail_angle: string;
+    structure: string[];
+    cta_placement: string;
+    cta_copy: string[];
+    why_this_fits: string;
+    evidence_notes: string[];
+  }>;
+};
+
 function listTextToArray(value: string) {
   return value
     .split("\n")
@@ -96,6 +138,26 @@ function listTextToArray(value: string) {
 
 function arrayToListText(value: string[]) {
   return value.join("\n");
+}
+
+function BulletList({
+  items,
+  emptyText,
+}: {
+  items: string[];
+  emptyText: string;
+}) {
+  if (!items.length) {
+    return <li>{emptyText}</li>;
+  }
+
+  return (
+    <>
+      {items.map((item) => (
+        <li key={item}>• {item}</li>
+      ))}
+    </>
+  );
 }
 
 export default function RunPage() {
@@ -108,16 +170,21 @@ export default function RunPage() {
   const [ingesting, setIngesting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
+  const [draftingRecommendations, setDraftingRecommendations] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [audienceInterestsText, setAudienceInterestsText] = useState("");
   const [likelyTopicPatternsText, setLikelyTopicPatternsText] = useState("");
+
+  const [recommendationDraft, setRecommendationDraft] =
+    useState<RecommendationDraft | null>(null);
 
   const [pageError, setPageError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [ingestMessage, setIngestMessage] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [synthesisMessage, setSynthesisMessage] = useState("");
+  const [recommendationsMessage, setRecommendationsMessage] = useState("");
 
   useEffect(() => {
     async function loadRun() {
@@ -149,6 +216,7 @@ export default function RunPage() {
     setIngestMessage("");
     setUploadMessage("");
     setSynthesisMessage("");
+    setRecommendationsMessage("");
   }
 
   async function handleSave() {
@@ -245,6 +313,23 @@ export default function RunPage() {
     }
   }
 
+  async function handleDraftRecommendations() {
+    setDraftingRecommendations(true);
+    clearMessages();
+
+    try {
+      const draft = await draftRecommendations(runId);
+      setRecommendationDraft(draft);
+      setRecommendationsMessage("Recommendation draft generated successfully.");
+    } catch (err) {
+      setPageError(
+        err instanceof Error ? err.message : "Failed to draft recommendations"
+      );
+    } finally {
+      setDraftingRecommendations(false);
+    }
+  }
+
   if (loading) {
     return <main className="p-8">Loading run...</main>;
   }
@@ -261,12 +346,12 @@ export default function RunPage() {
 
   return (
     <main className="min-h-screen bg-white px-6 py-12 text-black">
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-6xl space-y-8">
         <div>
-          <h1 className="text-3xl font-semibold">Assumption Review</h1>
+          <h1 className="text-3xl font-semibold">AI YouTube Strategist Dashboard</h1>
           <p className="mt-2 text-sm text-neutral-600">
-            Save assumptions, ingest YouTube evidence, upload screenshots, and
-            synthesize the evidence into strategist findings.
+            Review assumptions, ingest evidence, synthesize findings, and draft
+            strategist recommendations.
           </p>
         </div>
 
@@ -300,9 +385,15 @@ export default function RunPage() {
           </div>
         ) : null}
 
+        {recommendationsMessage ? (
+          <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {recommendationsMessage}
+          </div>
+        ) : null}
+
         <section className="rounded-2xl border border-neutral-200 p-6">
           <h2 className="text-xl font-semibold">Run overview</h2>
-          <div className="mt-4 space-y-2 text-sm text-neutral-700">
+          <div className="mt-4 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
             <p>
               <strong>Status:</strong> {run.status}
             </p>
@@ -315,12 +406,12 @@ export default function RunPage() {
             <p>
               <strong>Goals:</strong> {run.channel_goals}
             </p>
-            {run.notes ? (
-              <p>
-                <strong>Notes:</strong> {run.notes}
-              </p>
-            ) : null}
           </div>
+          {run.notes ? (
+            <p className="mt-4 text-sm text-neutral-700">
+              <strong>Notes:</strong> {run.notes}
+            </p>
+          ) : null}
         </section>
 
         <section className="rounded-2xl border border-neutral-200 p-6">
@@ -424,6 +515,16 @@ export default function RunPage() {
               className="rounded-lg border border-black px-5 py-3 text-sm font-medium text-black disabled:opacity-60"
             >
               {ingesting ? "Ingesting..." : "Ingest YouTube Evidence"}
+            </button>
+
+            <button
+              onClick={handleDraftRecommendations}
+              disabled={draftingRecommendations || !run.synthesized_evidence}
+              className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {draftingRecommendations
+                ? "Drafting..."
+                : "Draft Recommendations"}
             </button>
 
             <span className="text-sm text-neutral-500">
@@ -543,78 +644,60 @@ export default function RunPage() {
               <div>
                 <h3 className="text-sm font-semibold">Top video titles</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.top_video_titles.length ? (
-                    run.evidence_summary.top_video_titles.map((title) => (
-                      <li key={title}>• {title}</li>
-                    ))
-                  ) : (
-                    <li>No video titles available yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.top_video_titles}
+                    emptyText="No video titles available yet."
+                  />
                 </ul>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold">Repeated phrases</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.repeated_phrases.length ? (
-                    run.evidence_summary.repeated_phrases.map((phrase) => (
-                      <li key={phrase}>• {phrase}</li>
-                    ))
-                  ) : (
-                    <li>No repeated phrases detected yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.repeated_phrases}
+                    emptyText="No repeated phrases detected yet."
+                  />
                 </ul>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold">Praise themes</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.praise_themes.length ? (
-                    run.evidence_summary.praise_themes.map((theme) => (
-                      <li key={theme}>• {theme}</li>
-                    ))
-                  ) : (
-                    <li>No praise themes detected yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.praise_themes}
+                    emptyText="No praise themes detected yet."
+                  />
                 </ul>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold">Request themes</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.request_themes.length ? (
-                    run.evidence_summary.request_themes.map((theme) => (
-                      <li key={theme}>• {theme}</li>
-                    ))
-                  ) : (
-                    <li>No request themes detected yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.request_themes}
+                    emptyText="No request themes detected yet."
+                  />
                 </ul>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold">Pain points</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.pain_points.length ? (
-                    run.evidence_summary.pain_points.map((theme) => (
-                      <li key={theme}>• {theme}</li>
-                    ))
-                  ) : (
-                    <li>No pain points detected yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.pain_points}
+                    emptyText="No pain points detected yet."
+                  />
                 </ul>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold">Evidence notes</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.evidence_summary.evidence_notes.length ? (
-                    run.evidence_summary.evidence_notes.map((note) => (
-                      <li key={note}>• {note}</li>
-                    ))
-                  ) : (
-                    <li>No evidence notes available yet.</li>
-                  )}
+                  <BulletList
+                    items={run.evidence_summary.evidence_notes}
+                    emptyText="No evidence notes available yet."
+                  />
                 </ul>
               </div>
             </div>
@@ -644,52 +727,40 @@ export default function RunPage() {
                 <div>
                   <h3 className="text-sm font-semibold">Praise themes</h3>
                   <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                    {run.synthesized_evidence.praise_themes.length ? (
-                      run.synthesized_evidence.praise_themes.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))
-                    ) : (
-                      <li>No praise themes yet.</li>
-                    )}
+                    <BulletList
+                      items={run.synthesized_evidence.praise_themes}
+                      emptyText="No praise themes yet."
+                    />
                   </ul>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-semibold">Pain points</h3>
                   <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                    {run.synthesized_evidence.pain_points.length ? (
-                      run.synthesized_evidence.pain_points.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))
-                    ) : (
-                      <li>No pain points yet.</li>
-                    )}
+                    <BulletList
+                      items={run.synthesized_evidence.pain_points}
+                      emptyText="No pain points yet."
+                    />
                   </ul>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-semibold">Request themes</h3>
                   <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                    {run.synthesized_evidence.request_themes.length ? (
-                      run.synthesized_evidence.request_themes.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))
-                    ) : (
-                      <li>No request themes yet.</li>
-                    )}
+                    <BulletList
+                      items={run.synthesized_evidence.request_themes}
+                      emptyText="No request themes yet."
+                    />
                   </ul>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-semibold">Repeated phrases</h3>
                   <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                    {run.synthesized_evidence.repeated_phrases.length ? (
-                      run.synthesized_evidence.repeated_phrases.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))
-                    ) : (
-                      <li>No repeated phrases yet.</li>
-                    )}
+                    <BulletList
+                      items={run.synthesized_evidence.repeated_phrases}
+                      emptyText="No repeated phrases yet."
+                    />
                   </ul>
                 </div>
               </div>
@@ -697,17 +768,219 @@ export default function RunPage() {
               <div>
                 <h3 className="text-sm font-semibold">Evidence strength notes</h3>
                 <ul className="mt-2 space-y-2 text-sm text-neutral-700">
-                  {run.synthesized_evidence.evidence_strength_notes.length ? (
-                    run.synthesized_evidence.evidence_strength_notes.map((item) => (
-                      <li key={item}>• {item}</li>
-                    ))
-                  ) : (
-                    <li>No evidence strength notes yet.</li>
-                  )}
+                  <BulletList
+                    items={run.synthesized_evidence.evidence_strength_notes}
+                    emptyText="No evidence strength notes yet."
+                  />
                 </ul>
               </div>
             </div>
           </section>
+        ) : null}
+
+        {recommendationDraft ? (
+          <>
+            <section className="rounded-2xl border border-neutral-200 p-6">
+              <h2 className="text-xl font-semibold">Audience psychology</h2>
+
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Emotional jobs</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={
+                        recommendationDraft.audience_analysis.viewer_state_profile
+                          .emotional_jobs
+                      }
+                      emptyText="No emotional jobs detected."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Hidden tensions</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={
+                        recommendationDraft.audience_analysis.viewer_state_profile
+                          .hidden_tensions
+                      }
+                      emptyText="No hidden tensions detected."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Desired identity</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={
+                        recommendationDraft.audience_analysis.viewer_state_profile
+                          .desired_identity
+                      }
+                      emptyText="No desired identity detected."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Emotional drivers</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={
+                        recommendationDraft.audience_analysis.viewer_state_profile
+                          .emotional_drivers
+                      }
+                      emptyText="No emotional drivers detected."
+                    />
+                  </ul>
+                  <p className="mt-3 text-sm text-neutral-700">
+                    <strong>Trust mode:</strong>{" "}
+                    {
+                      recommendationDraft.audience_analysis.viewer_state_profile
+                        .trust_mode
+                    }
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Confirmed findings</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={recommendationDraft.audience_analysis.confirmed_findings}
+                      emptyText="No confirmed findings yet."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Inferences</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={recommendationDraft.audience_analysis.inferences}
+                      emptyText="No inferences yet."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Weak signals</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={recommendationDraft.audience_analysis.weak_signals}
+                      emptyText="No weak signals flagged."
+                    />
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold">Assumptions used</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    <BulletList
+                      items={recommendationDraft.audience_analysis.assumptions_used}
+                      emptyText="No assumptions recorded."
+                    />
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-neutral-200 p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Top 10 ranked video ideas</h2>
+                  <p className="mt-2 text-sm text-neutral-600">
+                    Evidence-backed ideas with packaging and CTA logic.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-600">
+                  Candidate pool: {recommendationDraft.candidates.length}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-6">
+                {recommendationDraft.final_recommendations.map((item) => (
+                  <article
+                    key={`${item.rank}-${item.idea}`}
+                    className="rounded-2xl border border-neutral-200 p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-neutral-500">
+                          Rank #{item.rank}
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold">{item.idea}</h3>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-6 md:grid-cols-2">
+                      <div>
+                        <h4 className="text-sm font-semibold">Hook</h4>
+                        <p className="mt-2 text-sm text-neutral-700">{item.hook}</p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">Thumbnail angle</h4>
+                        <p className="mt-2 text-sm text-neutral-700">
+                          {item.thumbnail_angle}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">Title options</h4>
+                        <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                          <BulletList
+                            items={item.title_options}
+                            emptyText="No title options provided."
+                          />
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">CTA placement</h4>
+                        <p className="mt-2 text-sm text-neutral-700">
+                          {item.cta_placement}
+                        </p>
+
+                        <h4 className="mt-4 text-sm font-semibold">CTA copy</h4>
+                        <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                          <BulletList
+                            items={item.cta_copy}
+                            emptyText="No CTA copy provided."
+                          />
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">Suggested structure</h4>
+                        <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                          <BulletList
+                            items={item.structure}
+                            emptyText="No structure provided."
+                          />
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">Why this fits</h4>
+                        <p className="mt-2 text-sm text-neutral-700">
+                          {item.why_this_fits}
+                        </p>
+
+                        <h4 className="mt-4 text-sm font-semibold">Evidence notes</h4>
+                        <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                          <BulletList
+                            items={item.evidence_notes}
+                            emptyText="No evidence notes provided."
+                          />
+                        </ul>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </>
         ) : null}
       </div>
     </main>

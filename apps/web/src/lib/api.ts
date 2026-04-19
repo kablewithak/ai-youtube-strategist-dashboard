@@ -197,3 +197,28 @@ export async function synthesizeEvidence(runId: string) {
 
   return body;
 }
+
+export async function draftRecommendations(runId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/runs/${runId}/recommendations/draft`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API while drafting recommendations. Make sure the backend is still running."
+    );
+  }
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response.status, body));
+  }
+
+  return body;
+}
